@@ -1,0 +1,61 @@
+{
+  "expo": {
+    "owner": "srtatsumi",
+    "name": "Fengle Business",
+    "slug": "fengle-restaurant-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/icon.png",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#4B18A6",
+    "android": {
+      "package": "com.fengle.restaurant",
+      "adaptiveIcon": {
+        "backgroundColor": "#4B18A6",
+        "foregroundImage": "./assets/android-icon-foreground.png",
+        "backgroundImage": "./assets/android-icon-background.png",
+        "monochromeImage": "./assets/android-icon-monochrome.png"
+      },
+      "predictiveBackGestureEnabled": false,
+      "googleServicesFile": "./google-services.json",
+      "permissions": [
+        "android.permission.RECORD_AUDIO"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/favicon.png"
+    },
+    "plugins": [
+      "expo-font",
+      "expo-status-bar",
+      [
+        "expo-splash-screen",
+        {
+          "backgroundColor": "#4B18A6",
+          "image": "./assets/fengle-logo.png",
+          "imageWidth": 120,
+          "resizeMode": "contain"
+        }
+      ],
+      [
+        "expo-image-picker",
+        {
+          "cameraPermission": "Fengle Business uses the camera to photograph the dishes you add to your menu."
+        }
+      ],
+      [
+        "expo-notifications",
+        {
+          "icon": "./assets/fengle-wordmark.png",
+          "color": "#4B18A6",
+          "defaultChannel": "orders"
+        }
+      ]
+    ],
+    "extra": {
+      "eas": {
+        "projectId": "901d5774-b675-4f05-a3ef-51a8027236a9"
+      }
+    }
+  }
+}

@@ -1,0 +1,67 @@
+{
+  "project_info": {
+    "project_number": "112267700699",
+    "project_id": "fengle-1a2b3",
+    "storage_bucket": "fengle-1a2b3.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:112267700699:android:d6036a0cdc20e960689ffe",
+        "android_client_info": {
+          "package_name": "com.fengle.customer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFm9HoiaNiMgM4byXfTYcxkQykn5G88bk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:112267700699:android:4b72d73d2322504e689ffe",
+        "android_client_info": {
+          "package_name": "com.fengle.restaurant"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFm9HoiaNiMgM4byXfTYcxkQykn5G88bk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:112267700699:android:68930523f4c9503c689ffe",
+        "android_client_info": {
+          "package_name": "com.fengle.rider"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyAFm9HoiaNiMgM4byXfTYcxkQykn5G88bk"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
