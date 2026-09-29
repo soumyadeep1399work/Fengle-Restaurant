@@ -35,6 +35,8 @@ export async function fetchRestaurantProfile(): Promise<RestaurantProfile | null
       name: String(restaurant.name),
       address: String(restaurant.address ?? ''),
       categories: (restaurant.categories ?? []).map((c: any) => ({ id: Number(c.id), name: String(c.name) })),
+      // Missing on an older backend build -> not gated, since there's no accept-agreement endpoint to submit to yet.
+      agreementRequired: Boolean(restaurant.agreementRequired),
     };
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return null;

@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from 'react';
-import { BackHandler, StyleSheet, Text, View } from 'react-native';
+import React, { useCallback, useEffect, useState } from 'react';
+import { ActivityIndicator, BackHandler, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 import { StatusBar } from 'expo-status-bar';
 import * as SplashScreen from 'expo-splash-screen';
@@ -25,11 +25,13 @@ import MenuScreen from './src/screens/MenuScreen';
 import SalesScreen from './src/screens/SalesScreen';
 import ProfileScreen from './src/screens/ProfileScreen';
 import OrderDetailScreen from './src/screens/OrderDetailScreen';
+import AgreementScreen from './src/screens/AgreementScreen';
 import ItemSheet from './src/components/ItemSheet';
 import CategorySheet from './src/components/CategorySheet';
 import TakeoverScreen from './src/screens/TakeoverScreen';
 import { colors, fonts } from './src/theme';
 import { MenuItem } from './src/types';
+import { fetchRestaurantProfile } from './src/api/menu';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
 
@@ -128,6 +130,45 @@ function Shell() {
   );
 }
 
+type GateStatus = 'checking' | 'required' | 'clear';
+
+/**
+ * Blocks Orders/Menu/Sales/Profile — and the order polling they depend on —
+ * until the owner has accepted the in-app agreement. Remounts fresh on every
+ * login (Main only renders this while isLoggedIn), so a different account on
+ * the same device always gets its own check.
+ */
+function AgreementGate({ children }: { children: React.ReactNode }) {
+  const [status, setStatus] = useState<GateStatus>('checking');
+
+  const check = useCallback(async () => {
+    try {
+      const profile = await fetchRestaurantProfile();
+      // No profile (older backend, 404) or the field missing entirely -> nothing to gate against.
+      setStatus(profile?.agreementRequired ? 'required' : 'clear');
+    } catch {
+      // Can't reach the backend to check — fail open rather than locking the owner out over a network blip.
+      setStatus('clear');
+    }
+  }, []);
+
+  useEffect(() => {
+    check();
+  }, [check]);
+
+  if (status === 'checking') {
+    return (
+      <View style={[styles.root, styles.center]}>
+        <ActivityIndicator color={colors.primary} />
+      </View>
+    );
+  }
+  if (status === 'required') {
+    return <AgreementScreen onAccepted={() => setStatus('clear')} />;
+  }
+  return <>{children}</>;
+}
+
 function Main() {
   const [fontsLoaded, fontError] = useFonts({
     Manrope_400Regular,
@@ -160,9 +201,11 @@ function Main() {
   // login/logout gives every session a clean slate.
   return (
     <View style={styles.root}>
-      <OrdersProvider>
-        <Shell />
-      </OrdersProvider>
+      <AgreementGate>
+        <OrdersProvider>
+          <Shell />
+        </OrdersProvider>
+      </AgreementGate>
     </View>
   );
 }
@@ -180,5 +223,6 @@ export default function App() {
 const styles = StyleSheet.create({
   flex: { flex: 1 },
   root: { flex: 1, backgroundColor: colors.surface },
+  center: { alignItems: 'center', justifyContent: 'center' },
   title: { paddingHorizontal: 20, paddingTop: 18, paddingBottom: 10, fontFamily: fonts.heading, fontSize: 20, letterSpacing: -0.5, color: colors.ink },
 });

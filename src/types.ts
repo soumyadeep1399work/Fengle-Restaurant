@@ -54,4 +54,6 @@ export interface RestaurantProfile {
   name: string;
   address: string;
   categories: Category[];
+  /** True until the owner accepts the in-app agreement (or the client publishes a newer version). */
+  agreementRequired: boolean;
 }
