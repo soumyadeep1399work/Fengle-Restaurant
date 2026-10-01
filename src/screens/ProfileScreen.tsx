@@ -1,9 +1,11 @@
 import React, { useEffect, useState } from 'react';
-import { Alert, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from '../theme';
 import { fetchRestaurantProfile } from '../api/menu';
 import { useAuth } from '../context/AuthContext';
 import { RestaurantProfile } from '../types';
+
+const ACCOUNT_DELETION_URL = 'https://fengle.in/data-deletion.html';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
@@ -30,6 +32,11 @@ export default function ProfileScreen() {
     {
       label: 'Support',
       onPress: () => Alert.alert('Support', 'Reach the Fengle team for help with orders or your menu.'),
+    },
+    {
+      // Google Play requires a way to request account deletion from inside the app.
+      label: 'Delete account',
+      onPress: () => Linking.openURL(ACCOUNT_DELETION_URL).catch(() => {}),
     },
     {
       label: 'Log out',

@@ -18,7 +18,8 @@
       },
       "predictiveBackGestureEnabled": false,
       "googleServicesFile": "./google-services.json",
-      "permissions": [
+      "blockedPermissions": [
+        "android.permission.SYSTEM_ALERT_WINDOW",
         "android.permission.RECORD_AUDIO"
       ]
     },
@@ -40,7 +41,8 @@
       [
         "expo-image-picker",
         {
-          "cameraPermission": "Fengle Business uses the camera to photograph the dishes you add to your menu."
+          "cameraPermission": "Fengle Business uses the camera to photograph the dishes you add to your menu.",
+          "microphonePermission": false
         }
       ],
       [
