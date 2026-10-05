@@ -49,6 +49,34 @@ function buildQuery(query?: Query): string {
   return parts.length ? `?${parts.join('&')}` : '';
 }
 
+/**
+ * Multipart uploads (photos) go through XMLHttpRequest, not fetch. Expo's
+ * runtime replaces the global `fetch`, and that version rejects React Native's
+ * { uri, name, type } file parts with "Unsupported FormDataPart implementation"
+ * before sending a single byte (the user just saw "Can't reach the server"
+ * instantly on every photo). React Native's XHR still streams those parts
+ * natively and isn't touched by that swap.
+ */
+function xhrSend(
+  url: string,
+  method: string,
+  headers: Record<string, string>,
+  form: FormData,
+  timeoutMs: number
+): Promise<{ status: number; text: string; date: string | null }> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open(method, url);
+    for (const [k, v] of Object.entries(headers)) xhr.setRequestHeader(k, v);
+    xhr.timeout = timeoutMs;
+    xhr.onload = () => resolve({ status: xhr.status, text: xhr.responseText, date: xhr.getResponseHeader('date') });
+    xhr.onerror = () => reject(new Error('network error'));
+    xhr.ontimeout = () => reject(new Error('timeout'));
+    xhr.onabort = () => reject(new Error('aborted'));
+    xhr.send(form);
+  });
+}
+
 export async function apiFetch<T>(path: string, opts: Options = {}): Promise<T> {
   const { method = 'GET', body, query, auth = true, timeoutMs = 15000 } = opts;
 
@@ -58,6 +86,34 @@ export async function apiFetch<T>(path: string, opts: Options = {}): Promise<T> 
   if (body !== undefined && !isForm) headers['Content-Type'] = 'application/json';
   const token = auth ? getToken() : null;
   if (token) headers.Authorization = `Bearer ${token}`;
+
+  if (isForm) {
+    let sent: { status: number; text: string; date: string | null };
+    try {
+      sent = await xhrSend(`${API_BASE_URL}${path}${buildQuery(query)}`, method, headers, body as FormData, timeoutMs);
+    } catch {
+      throw new ApiError(0, 'Can’t reach the server. Check your connection and try again.');
+    }
+    if (sent.date) {
+      const serverTime = Date.parse(sent.date);
+      if (!Number.isNaN(serverTime)) serverOffsetMs = serverTime - Date.now();
+    }
+    let formData: unknown = null;
+    if (sent.text) {
+      try {
+        formData = JSON.parse(sent.text);
+      } catch {
+        formData = sent.text;
+      }
+    }
+    if (sent.status < 200 || sent.status >= 300) {
+      const serverMessage =
+        formData && typeof formData === 'object' ? ((formData as any).error ?? (formData as any).message) : undefined;
+      if (sent.status === 401 && token) onUnauthorized?.();
+      throw new ApiError(sent.status, serverMessage ? String(serverMessage) : `Request failed (${sent.status})`, formData);
+    }
+    return formData as T;
+  }
 
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), timeoutMs);
