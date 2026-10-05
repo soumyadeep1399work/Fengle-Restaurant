@@ -28,7 +28,23 @@ This in-app Agreement is additional to, and does not replace, the physical onboa
 
 type Step = 'terms' | 'selfie';
 
-export default function AgreementScreen({ onAccepted }: { onAccepted: () => void }) {
+function DeniedBanner({ reason }: { reason?: string | null }) {
+  if (!reason) return null;
+  return (
+    <View style={bannerStyles.box}>
+      <Text style={bannerStyles.title}>Your photo wasn’t approved</Text>
+      <Text style={bannerStyles.text}>{reason}. Please read the agreement and take a new photo.</Text>
+    </View>
+  );
+}
+
+const bannerStyles = StyleSheet.create({
+  box: { marginTop: 12, padding: 12, borderRadius: 12, backgroundColor: '#FBE9E7' },
+  title: { fontFamily: fonts.bodyExtraBold, fontSize: 13, color: status.alert },
+  text: { marginTop: 3, fontFamily: fonts.body, fontSize: 12.5, lineHeight: 18, color: colors.body },
+});
+
+export default function AgreementScreen({ onAccepted, deniedReason }: { onAccepted: () => void; deniedReason?: string | null }) {
   const { logout } = useAuth();
   const [step, setStep] = useState<Step>('terms');
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
@@ -70,6 +86,7 @@ export default function AgreementScreen({ onAccepted }: { onAccepted: () => void
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
         <Text style={styles.title}>Partner agreement</Text>
+        <DeniedBanner reason={deniedReason} />
         <Text style={styles.subtitle}>Please read the agreement below. This is in addition to the physical copy you signed with Fengle.</Text>
         <ScrollView style={styles.scroll} contentContainerStyle={styles.termsBox} onScroll={onScroll} scrollEventThrottle={64}>
           <Text style={styles.termsText}>{AGREEMENT_TEXT}</Text>
@@ -95,6 +112,7 @@ export default function AgreementScreen({ onAccepted }: { onAccepted: () => void
   return (
     <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
       <Text style={styles.title}>Verify it’s you</Text>
+      <DeniedBanner reason={deniedReason} />
       <Text style={styles.subtitle}>
         Take a live photo to confirm you personally accepted this agreement. Photos from your gallery can’t be used — the camera opens
         directly.

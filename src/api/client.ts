@@ -30,6 +30,13 @@ export function setUnauthorizedHandler(handler: (() => void) | null) {
   onUnauthorized = handler;
 }
 
+// Called when any request is refused because the admin hasn't approved this partner's selfie
+// (yet, or any more) — the app re-checks its profile and switches to the right screen.
+let onVerificationRequired: (() => void) | null = null;
+export function setVerificationHandler(handler: (() => void) | null) {
+  onVerificationRequired = handler;
+}
+
 type Query = Record<string, string | number | boolean | undefined | null>;
 
 interface Options {
@@ -110,6 +117,7 @@ export async function apiFetch<T>(path: string, opts: Options = {}): Promise<T> 
       const serverMessage =
         formData && typeof formData === 'object' ? ((formData as any).error ?? (formData as any).message) : undefined;
       if (sent.status === 401 && token) onUnauthorized?.();
+      if (sent.status === 403 && (formData as any)?.code === 'verification_required') onVerificationRequired?.();
       throw new ApiError(sent.status, serverMessage ? String(serverMessage) : `Request failed (${sent.status})`, formData);
     }
     return formData as T;
@@ -152,6 +160,7 @@ export async function apiFetch<T>(path: string, opts: Options = {}): Promise<T> 
     const serverMessage =
       data && typeof data === 'object' ? ((data as any).error ?? (data as any).message) : undefined;
     if (res.status === 401 && token) onUnauthorized?.();
+    if (res.status === 403 && (data as any)?.code === 'verification_required') onVerificationRequired?.();
     throw new ApiError(res.status, serverMessage ? String(serverMessage) : `Request failed (${res.status})`, data);
   }
 

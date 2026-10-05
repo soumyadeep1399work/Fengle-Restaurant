@@ -56,4 +56,8 @@ export interface RestaurantProfile {
   categories: Category[];
   /** True until the owner accepts the in-app agreement (or the client publishes a newer version). */
   agreementRequired: boolean;
+  /** Admin's review of the selfie: only 'approved' partners can use the app. Treated as approved if the backend doesn't send it. */
+  verificationStatus: 'pending' | 'approved' | 'denied';
+  /** Why the photo was denied (shown on the agreement screen). */
+  verificationDeniedReason: string | null;
 }

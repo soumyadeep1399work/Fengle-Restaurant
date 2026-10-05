@@ -31,6 +31,8 @@ import CategorySheet from './src/components/CategorySheet';
 import TakeoverScreen from './src/screens/TakeoverScreen';
 import { colors, fonts } from './src/theme';
 import { MenuItem } from './src/types';
+import VerificationPendingScreen from './src/screens/VerificationPendingScreen';
+import { setVerificationHandler } from './src/api/client';
 import { fetchRestaurantProfile } from './src/api/menu';
 
 SplashScreen.preventAutoHideAsync().catch(() => {});
@@ -130,7 +132,7 @@ function Shell() {
   );
 }
 
-type GateStatus = 'checking' | 'required' | 'clear';
+type GateStatus = 'checking' | 'required' | 'review' | 'clear';
 
 /**
  * Blocks Orders/Menu/Sales/Profile — and the order polling they depend on —
@@ -140,20 +142,32 @@ type GateStatus = 'checking' | 'required' | 'clear';
  */
 function AgreementGate({ children }: { children: React.ReactNode }) {
   const [status, setStatus] = useState<GateStatus>('checking');
+  const [deniedReason, setDeniedReason] = useState<string | null>(null);
 
   const check = useCallback(async () => {
     try {
       const profile = await fetchRestaurantProfile();
       // No profile (older backend, 404) or the field missing entirely -> nothing to gate against.
-      setStatus(profile?.agreementRequired ? 'required' : 'clear');
+      setDeniedReason(profile?.verificationStatus === 'denied' ? profile.verificationDeniedReason : null);
+      // Selfie sent but not yet approved by an admin -> wait; denied counts as agreementRequired (retake it).
+      setStatus(profile?.agreementRequired ? 'required' : profile?.verificationStatus === 'pending' ? 'review' : 'clear');
     } catch {
-      // Can't reach the backend to check — fail open rather than locking the owner out over a network blip.
-      setStatus('clear');
+      // Can't reach the backend to check — fail open rather than locking the owner out over a network blip,
+      // except when already sitting on the agreement/review screen: a blip there must not unlock the app.
+      setStatus((prev) => (prev === 'required' || prev === 'review' ? prev : 'clear'));
     }
   }, []);
 
   useEffect(() => {
     check();
+  }, [check]);
+
+  // Any request the backend refuses with verification_required (e.g. an admin denies mid-session) re-runs the check.
+  useEffect(() => {
+    setVerificationHandler(() => {
+      check();
+    });
+    return () => setVerificationHandler(null);
   }, [check]);
 
   if (status === 'checking') {
@@ -164,7 +178,10 @@ function AgreementGate({ children }: { children: React.ReactNode }) {
     );
   }
   if (status === 'required') {
-    return <AgreementScreen onAccepted={() => setStatus('clear')} />;
+    return <AgreementScreen deniedReason={deniedReason} onAccepted={check} />;
+  }
+  if (status === 'review') {
+    return <VerificationPendingScreen onCheck={check} />;
   }
   return <>{children}</>;
 }
