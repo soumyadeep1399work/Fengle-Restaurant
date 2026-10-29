@@ -34,8 +34,8 @@
         "expo-splash-screen",
         {
           "backgroundColor": "#4B18A6",
-          "image": "./assets/fengle-logo.png",
-          "imageWidth": 120,
+          "image": "./assets/splash-logo.png",
+          "imageWidth": 172,
           "resizeMode": "contain"
         }
       ],
