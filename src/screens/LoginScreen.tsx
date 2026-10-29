@@ -6,13 +6,14 @@ import Button from '../components/Button';
 import { useAuth } from '../context/AuthContext';
 import { requestOtp, verifyOtp } from '../api/auth';
 import { errorMessage } from '../utils/actions';
+import { readPhoneInput } from '../utils/phone';
 
 const RESEND_SECONDS = 30;
 
 // The flatboard shows phone + password, but restaurants sign in with an SMS
 // code (the backend has no password login), so the second step is the code.
 export default function LoginScreen() {
-  const { login } = useAuth();
+  const { login, sessionNotice, dismissSessionNotice } = useAuth();
   const [phone, setPhone] = useState('');
   const [otp, setOtp] = useState('');
   const [step, setStep] = useState<'phone' | 'otp'>('phone');
@@ -29,6 +30,7 @@ export default function LoginScreen() {
   async function sendCode() {
     setBusy(true);
     setError('');
+    dismissSessionNotice();
     try {
       await requestOtp(phone);
       setStep('otp');
@@ -66,16 +68,23 @@ export default function LoginScreen() {
             {step === 'phone' ? 'Log in to manage orders and your menu.' : `Enter the 6-digit code sent to +91 ${phone}.`}
           </Text>
 
+          {!!sessionNotice && step === 'phone' && (
+            <View style={styles.notice}>
+              <Text style={styles.noticeText}>{sessionNotice}</Text>
+            </View>
+          )}
+
           {step === 'phone' ? (
             <>
               <Text style={styles.label}>Business phone</Text>
               <TextInput
                 value={phone}
-                onChangeText={(t) => setPhone(t.replace(/\D/g, '').slice(0, 10))}
+                onChangeText={(t) => setPhone((prev) => readPhoneInput(t, prev))}
                 placeholder="10-digit mobile number"
                 placeholderTextColor={colors.faint}
                 keyboardType="number-pad"
-                maxLength={10}
+                autoComplete="tel"
+                textContentType="telephoneNumber"
                 style={styles.input}
               />
             </>
@@ -88,6 +97,8 @@ export default function LoginScreen() {
                 placeholder="••••••"
                 placeholderTextColor={colors.faint}
                 keyboardType="number-pad"
+                autoComplete="sms-otp"
+                textContentType="oneTimeCode"
                 maxLength={6}
                 autoFocus
                 style={[styles.input, styles.otpInput]}
@@ -134,6 +145,8 @@ const styles = StyleSheet.create({
   linkRow: { marginTop: 14, flexDirection: 'row', justifyContent: 'space-between' },
   link: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.primaryMid },
   linkOff: { color: colors.mutedLight },
+  notice: { marginTop: 18, padding: 12, borderRadius: 10, backgroundColor: colors.goldChipBg },
+  noticeText: { fontFamily: fonts.bodyBold, fontSize: 12.5, lineHeight: 18, color: colors.goldChipText },
   error: { marginTop: 14, fontFamily: fonts.bodyBold, fontSize: 12.5, color: status.alert },
   footer: { paddingHorizontal: 26, paddingBottom: 26 },
 });

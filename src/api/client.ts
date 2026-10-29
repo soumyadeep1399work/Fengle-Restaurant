@@ -37,6 +37,11 @@ export function setVerificationHandler(handler: (() => void) | null) {
   onVerificationRequired = handler;
 }
 
+// A request that never got an HTTP answer. Two different causes deserve two different messages: a
+// timeout means the server (or the SMS provider behind it) is slow, not that the phone is offline.
+const MSG_UNREACHABLE = 'Can’t reach the server. Check your internet connection and try again.';
+const MSG_TIMEOUT = 'The server is taking too long to respond. Please try again in a moment.';
+
 type Query = Record<string, string | number | boolean | undefined | null>;
 
 interface Options {
@@ -98,8 +103,9 @@ export async function apiFetch<T>(path: string, opts: Options = {}): Promise<T> 
     let sent: { status: number; text: string; date: string | null };
     try {
       sent = await xhrSend(`${API_BASE_URL}${path}${buildQuery(query)}`, method, headers, body as FormData, timeoutMs);
-    } catch {
-      throw new ApiError(0, 'Can’t reach the server. Check your connection and try again.');
+    } catch (err) {
+      console.warn(`[api] ${method} ${path} failed before a response:`, err);
+      throw new ApiError(0, err instanceof Error && err.message === 'timeout' ? MSG_TIMEOUT : MSG_UNREACHABLE);
     }
     if (sent.date) {
       const serverTime = Date.parse(sent.date);
@@ -134,8 +140,10 @@ export async function apiFetch<T>(path: string, opts: Options = {}): Promise<T> 
       body: body === undefined ? undefined : isForm ? (body as FormData) : JSON.stringify(body),
       signal: controller.signal,
     });
-  } catch {
-    throw new ApiError(0, 'Can’t reach the server. Check your connection and try again.');
+  } catch (err) {
+    // Our own timer aborted the request -> slow server; anything else -> no connection / DNS / TLS.
+    console.warn(`[api] ${method} ${path} failed before a response:`, err);
+    throw new ApiError(0, controller.signal.aborted ? MSG_TIMEOUT : MSG_UNREACHABLE);
   } finally {
     clearTimeout(timer);
   }

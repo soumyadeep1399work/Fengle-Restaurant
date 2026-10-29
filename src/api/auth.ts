@@ -16,6 +16,9 @@ export function requestOtp(phone: string) {
     method: 'POST',
     auth: false,
     body: { phone, purpose: PURPOSE },
+    // The server waits for the SMS provider before it answers, so allow more than the default 15s
+    // (aborting early shows an error even though the text message may still arrive).
+    timeoutMs: 30000,
   });
 }
 

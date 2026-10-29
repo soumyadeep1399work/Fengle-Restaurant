@@ -10,6 +10,19 @@ interface AuthContextValue {
   user: AuthUser | null;
   login: (token: string, user: AuthUser) => Promise<void>;
   logout: () => Promise<void>;
+  /** Why the owner was sent back to the login screen (expired session, suspended account...), if it wasn't their own log out. */
+  sessionNotice: string | null;
+  dismissSessionNotice: () => void;
+}
+
+/**
+ * The server's wording for a dead token ("Invalid or expired token") is technical, so say it plainly;
+ * its other refusals (account suspended, account gone) are worth showing exactly as sent.
+ */
+function sessionEndedNotice(e: unknown): string {
+  const text = e instanceof ApiError ? e.message : '';
+  if (!text || /token/i.test(text)) return 'Your session has expired. Please log in again.';
+  return text;
 }
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
@@ -17,6 +30,7 @@ const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<AuthUser | null>(null);
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
   const userRef = useRef<AuthUser | null>(null);
 
   const applyUser = useCallback((u: AuthUser | null) => {
@@ -36,7 +50,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         try {
           const { user: fresh } = await fetchSession(6000);
           // A token from another account type (e.g. left over from a different app) isn't ours.
-          if (fresh.type !== 'restaurant') throw new ApiError(401, 'Not a restaurant session');
+          if (fresh.type !== 'restaurant') throw new ApiError(401, 'This isn’t a restaurant account. Please log in with your restaurant’s number.');
           await saveSession(stored.token, fresh);
           if (!cancelled) {
             applyUser(fresh);
@@ -48,6 +62,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             if (!cancelled) applyUser(stored.user);
           } else {
             await clearSession();
+            if (!cancelled && tokenRejected) setSessionNotice(sessionEndedNotice(e));
           }
         }
       } finally {
@@ -66,6 +81,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       forgetPushToken();
       clearSession();
       applyUser(null);
+      setSessionNotice('Your session has expired. Please log in again.');
     });
     return () => setUnauthorizedHandler(null);
   }, [applyUser]);
@@ -73,6 +89,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const login = useCallback(
     async (token: string, u: AuthUser) => {
       await saveSession(token, u);
+      setSessionNotice(null);
       applyUser(u);
       registerForPushNotifications();
     },
@@ -87,7 +104,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     applyUser(null);
   }, [applyUser]);
 
-  const value: AuthContextValue = { isLoading, isLoggedIn: !!user, user, login, logout };
+  const dismissSessionNotice = useCallback(() => setSessionNotice(null), []);
+
+  const value: AuthContextValue = { isLoading, isLoggedIn: !!user, user, login, logout, sessionNotice, dismissSessionNotice };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
 }
