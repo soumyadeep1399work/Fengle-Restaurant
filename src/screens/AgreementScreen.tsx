@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, NativeScrollEvent, NativeSyntheticEvent, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { colors, fonts, status } from '../theme';
@@ -8,23 +8,36 @@ import { errorMessage } from '../utils/actions';
 import { takeSelfie } from '../utils/photo';
 import Button from '../components/Button';
 
-// TODO(client): placeholder terms — the client must supply the real legal
-// text before launch (same status as the invoice issuer fields).
-const AGREEMENT_TEXT = `This Partner Agreement (the "Agreement") is entered into between Fengle and the restaurant partner named on this account ("Partner").
+// The Fengle Restaurant Partnership Agreement, as supplied by the client (2026-10-29). Only obvious slips were
+// corrected, and none of the meaning: "Cociliation" -> "Conciliation", the Act's year "1896" -> "1996", a missing
+// "on" in the commission line, and two missing full stops.
+// If this wording ever changes after kitchens have accepted it, bump AGREEMENT_VERSION (api/agreement.ts) together
+// with the backend's CURRENT_AGREEMENT_VERSION so they accept the new text.
+const AGREEMENT_TITLE = 'Fengle Restaurant Partnership Agreement';
 
-1. Scope. Partner agrees to fulfil orders routed to it through the Fengle platform in line with the menu, pricing and availability it maintains in the Fengle Restaurant app, and with the commission rate and delivery radius set out in Partner's physical onboarding agreement with Fengle.
+const AGREEMENT_TERMS: string[] = [
+  'You are an independent, non-exclusive partner of Fengle, not an employee, agent or joint venture partner, and Fengle does not guarantee order volume.',
+  'Customers order item by item by cuisine category, and Fengle routes each order automatically to the nearest available partner restaurant.',
+  'Your restaurant name, logo and location are never shown to customers, and you must not reveal that you supply Fengle.',
+  'Pack every order in Fengle-specified packaging with no branding, menus, pamphlets or contact details of your own. Fengle may or may not provide packaging material.',
+  'You declare Base Prices (not higher than your walk-in prices), and Fengle alone sets customer prices, fees, discounts and offers.',
+  'Fengle charges commission on the Item Value of every item sold (GST on the commission, if applicable, is extra), as agreed.',
+  'Payouts go to your bank account weekly or daily on the basis of mutual consent. Net commission, refunds, penalties and statutory deductions may be adjusted.',
+  'Report any settlement discrepancy within 3 days, or the statement is deemed accepted.',
+  'Accept or reject each order within three minutes, prepare it within the stated preparation time, and keep item availability and operating hours updated in the app.',
+  'Food must be fresh, safe and the same quality as your own customers get, as required by FSSAI and food safety law.',
+  'In case of unforeseen circumstances, order cancellation, an incorrect delivery address, or if the customer is unreachable or fails to answer the delivery partner’s calls, the food order will be returned to the restaurant. The restaurant reserves the right to sell or serve the returned order to another customer, subject to food safety and quality standards.',
+  'You bear the cost of refunds and penalties for cancellations, delays, wrong or poor-quality orders and other faults that are yours.',
+  'Fengle handles all delivery within 3 km (extendable to 5 km) and handles all customer support.',
+  'You must hold and maintain a valid FSSAI licence, GST registration (where applicable) and a trade licence, and follow all applicable laws.',
+  'Platform and customer data and the Fengle brand belong to Fengle, and you let Fengle use your menu content and photos without revealing your identity.',
+  'You indemnify Fengle for food-safety defects and your breaches, and Fengle’s liability to you is capped at your last 3 months’ payouts, with no liability for platform downtime.',
+  'Fengle may suspend or terminate you immediately for serious breaches, and disputes go to arbitration in Kolkata under Indian law and Arbitration and Conciliation Act, 1996 (as amended).',
+];
 
-2. Order handling. Partner will accept or reject each order promptly, mark items unavailable honestly rather than accepting and later failing to deliver them, and hand completed orders to the assigned rider in the condition and packaging expected of a food business.
-
-3. Menu accuracy. Partner is responsible for the accuracy of prices, descriptions and photos it adds to the shared Fengle catalog, and for keeping stock status up to date so customers are not sold items Partner cannot fulfil.
-
-4. Compliance. Partner confirms it holds all licenses required to prepare and sell food at the address on file, including any applicable FSSAI registration, and will keep these current for the life of this Agreement.
-
-5. Payments. Settlement follows the commission and payout terms of Partner's physical onboarding agreement with Fengle; this in-app Agreement does not change those commercial terms.
-
-6. Acceptance. By ticking the box below and completing photo verification, the person completing this step confirms they are the owner or an authorised signatory of Partner, and that they are personally accepting this Agreement on Partner's behalf.
-
-This in-app Agreement is additional to, and does not replace, the physical onboarding agreement signed with Fengle.`;
+// Shown right above the button: tapping "I Agree" is the act of consent.
+const AGREEMENT_ACCEPT_TEXT =
+  'By tapping ‘I Agree’, I confirm I am authorised to bind my restaurant and accept the Fengle Restaurant Partnership Agreement, including the terms above.';
 
 type Step = 'terms' | 'selfie';
 
@@ -48,10 +61,17 @@ export default function AgreementScreen({ onAccepted, deniedReason }: { onAccept
   const { logout } = useAuth();
   const [step, setStep] = useState<Step>('terms');
   const [scrolledToEnd, setScrolledToEnd] = useState(false);
-  const [confirmed, setConfirmed] = useState(false);
+  const [layoutH, setLayoutH] = useState(0);
+  const [contentH, setContentH] = useState(0);
   const [selfieUri, setSelfieUri] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
+
+  // A tall screen may show every term without any scrolling; otherwise onScroll would never fire and "I Agree"
+  // would stay disabled for good.
+  useEffect(() => {
+    if (layoutH > 0 && contentH > 0 && contentH <= layoutH + 24) setScrolledToEnd(true);
+  }, [layoutH, contentH]);
 
   function onScroll(e: NativeSyntheticEvent<NativeScrollEvent>) {
     if (scrolledToEnd) return;
@@ -85,23 +105,27 @@ export default function AgreementScreen({ onAccepted, deniedReason }: { onAccept
   if (step === 'terms') {
     return (
       <SafeAreaView style={styles.safe} edges={['top', 'bottom']}>
-        <Text style={styles.title}>Partner agreement</Text>
+        <Text style={styles.title}>{AGREEMENT_TITLE}</Text>
         <DeniedBanner reason={deniedReason} />
         <Text style={styles.subtitle}>Please read the agreement below. This is in addition to the physical copy you signed with Fengle.</Text>
-        <ScrollView style={styles.scroll} contentContainerStyle={styles.termsBox} onScroll={onScroll} scrollEventThrottle={64}>
-          <Text style={styles.termsText}>{AGREEMENT_TEXT}</Text>
+        <ScrollView
+          style={styles.scroll}
+          contentContainerStyle={styles.termsBox}
+          onScroll={onScroll}
+          scrollEventThrottle={64}
+          onLayout={(e) => setLayoutH(e.nativeEvent.layout.height)}
+          onContentSizeChange={(_, h) => setContentH(h)}
+        >
+          {AGREEMENT_TERMS.map((term, i) => (
+            <View key={i} style={styles.termRow}>
+              <Text style={styles.bullet}>{'\u2022'}</Text>
+              <Text style={styles.termText}>{term}</Text>
+            </View>
+          ))}
           {!scrolledToEnd && <Text style={styles.scrollHint}>Scroll to the end to continue</Text>}
         </ScrollView>
-        <Pressable
-          onPress={() => scrolledToEnd && setConfirmed((c) => !c)}
-          style={[styles.checkboxRow, !scrolledToEnd && styles.checkboxRowDisabled]}
-        >
-          <View style={[styles.checkbox, confirmed && styles.checkboxOn]}>{confirmed && <Text style={styles.checkboxTick}>✓</Text>}</View>
-          <Text style={styles.checkboxLabel}>
-            I am the owner or an authorised signatory of this business, and I agree to these terms.
-          </Text>
-        </Pressable>
-        <Button label="Continue to verification" height={52} disabled={!confirmed} onPress={() => setStep('selfie')} style={styles.cta} />
+        <Text style={[styles.acceptText, !scrolledToEnd && styles.acceptTextDisabled]}>{AGREEMENT_ACCEPT_TEXT}</Text>
+        <Button label="I Agree" height={52} disabled={!scrolledToEnd} onPress={() => setStep('selfie')} style={styles.cta} />
         <Text style={styles.logout} onPress={() => logout()}>
           Not the right account? Log out
         </Text>
@@ -147,14 +171,12 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: 8, fontFamily: fonts.body, fontSize: 13, lineHeight: 19, color: colors.bodyMuted },
   scroll: { flex: 1, marginTop: 16, borderRadius: 14, borderWidth: 1, borderColor: colors.borderAlt },
   termsBox: { padding: 16 },
-  termsText: { fontFamily: fonts.body, fontSize: 13, lineHeight: 20, color: colors.body },
-  scrollHint: { marginTop: 16, textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.mutedLight },
-  checkboxRow: { marginTop: 16, flexDirection: 'row', alignItems: 'flex-start', gap: 10 },
-  checkboxRowDisabled: { opacity: 0.4 },
-  checkbox: { width: 22, height: 22, borderRadius: 6, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', marginTop: 1 },
-  checkboxOn: { backgroundColor: colors.primary, borderColor: colors.primary },
-  checkboxTick: { color: colors.surfaceCream, fontSize: 13, fontFamily: fonts.bodyExtraBold },
-  checkboxLabel: { flex: 1, fontFamily: fonts.bodyBold, fontSize: 13, lineHeight: 19, color: colors.ink },
+  termRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  bullet: { fontFamily: fonts.bodyBold, fontSize: 13, lineHeight: 20, color: colors.primaryMid },
+  termText: { flex: 1, fontFamily: fonts.body, fontSize: 13, lineHeight: 20, color: colors.body },
+  scrollHint: { marginTop: 4, textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 11.5, color: colors.mutedLight },
+  acceptText: { marginTop: 14, fontFamily: fonts.bodyBold, fontSize: 12.5, lineHeight: 18, color: colors.ink },
+  acceptTextDisabled: { opacity: 0.45 },
   cta: { marginTop: 16 },
   logout: { marginTop: 14, marginBottom: 10, textAlign: 'center', fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.mutedLight },
   selfieArea: { marginTop: 24, alignItems: 'center' },
