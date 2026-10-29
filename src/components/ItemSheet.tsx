@@ -2,10 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { ActivityIndicator, Alert, Image, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { colors, fonts, status } from '../theme';
-import { createItem, fetchRestaurantProfile, updateItem, uploadImage, ItemChanges } from '../api/menu';
-import { Category, MenuItem } from '../types';
+import { ApiError } from '../api/client';
+import { createItem, fetchRestaurantProfile, updateItem, uploadImage, ItemChanges, Portion } from '../api/menu';
+import { Category, MenuItem, PortionUnit } from '../types';
 import { errorMessage } from '../utils/actions';
+import { formatMoney } from '../utils/money';
 import { pickPhoto, PhotoSource } from '../utils/photo';
+import { PORTION_UNITS, readPortion } from '../utils/portion';
 import Button from './Button';
 import CategorySheet from './CategorySheet';
 
@@ -16,7 +19,13 @@ interface Props {
   onSaved: () => void;
 }
 
-const PRICE_RE = /^\d{1,6}(\.\d{1,2})?$/;
+/** The server's own text is already clear, but a price rejection should never read like a connection problem. */
+function saveErrorMessage(e: unknown): string {
+  if (e instanceof ApiError && e.status === 403 && (e.body as { code?: string } | null)?.code === 'price_admin_only') {
+    return 'Prices can only be set by Fengle. Your dish can’t include a price — Fengle adds it once your dish is approved.';
+  }
+  return errorMessage(e);
+}
 
 // Add / edit form. Mounted only while open (so it starts fresh each time), and a
 // plain overlay rather than <Modal> — same as the customer app's sheets — so
@@ -27,7 +36,8 @@ export default function ItemSheet({ item, onClose, onSaved }: Props) {
   // The kitchen's approved categories — the only ones the backend lets it add to.
   const [categories, setCategories] = useState<Category[] | null>(null);
   const [name, setName] = useState(item?.name ?? '');
-  const [price, setPrice] = useState(item ? String(item.price) : '');
+  const [quantityText, setQuantityText] = useState(item?.quantityValue != null ? String(item.quantityValue) : '');
+  const [unit, setUnit] = useState<PortionUnit | null>(item?.quantityUnit ?? null);
   const [categoryId, setCategoryId] = useState<number | null>(item?.categoryId ?? null);
   const [isVeg, setIsVeg] = useState<boolean | null>(item ? item.isVeg : null); // new items have no default: a wrong label is worse than a blank
   const [photoUri, setPhotoUri] = useState<string | null>(null); // a newly picked photo, not yet uploaded
@@ -58,10 +68,14 @@ export default function ItemSheet({ item, onClose, onSaved }: Props) {
   }, [editing]);
 
   const trimmedName = name.trim();
-  const priceValid = PRICE_RE.test(price) && Number(price) > 0;
+  const portion = readPortion(quantityText, unit);
+  const currentPortion: Portion | null = portion.kind === 'ok' ? { value: portion.value, unit: portion.unit } : null;
+  const originalPortion: Portion | null =
+    item && item.quantityValue != null && item.quantityUnit ? { value: item.quantityValue, unit: item.quantityUnit } : null;
+  const portionChanged = currentPortion?.value !== originalPortion?.value || currentPortion?.unit !== originalPortion?.unit;
   const photoChanged = photoUri !== null || (editing && existingUrl !== (item?.imageUrl ?? null));
-  const changed = !editing || trimmedName !== item!.name || Number(price) !== item!.price || isVeg !== item!.isVeg || photoChanged;
-  const canSave = trimmedName.length > 0 && priceValid && categoryId !== null && isVeg !== null && changed;
+  const changed = !editing || trimmedName !== item!.name || isVeg !== item!.isVeg || photoChanged || portionChanged;
+  const canSave = trimmedName.length > 0 && portion.kind !== 'invalid' && categoryId !== null && isVeg !== null && changed;
   const shownPhoto = photoUri ?? existingUrl;
 
   async function choosePhoto(source: PhotoSource) {
@@ -103,17 +117,17 @@ export default function ItemSheet({ item, onClose, onSaved }: Props) {
       if (item) {
         const changes: ItemChanges = {};
         if (trimmedName !== item.name) changes.name = trimmedName;
-        if (Number(price) !== item.price) changes.price = Number(price);
         if (isVeg !== item.isVeg) changes.isVeg = isVeg;
+        if (portionChanged) changes.portion = currentPortion; // null clears it
         if (uploaded) changes.imageUrl = uploaded;
         else if (existingUrl === null && item.imageUrl !== null) changes.imageUrl = null;
         await updateItem(item.id, changes);
       } else {
-        await createItem({ categoryId, name: trimmedName, price: Number(price), isVeg, imageUrl: uploaded });
+        await createItem({ categoryId, name: trimmedName, isVeg, imageUrl: uploaded, portion: currentPortion ?? undefined });
       }
       onSaved();
     } catch (e) {
-      setError(errorMessage(e));
+      setError(saveErrorMessage(e));
       setSaving(false);
     }
   }
@@ -160,16 +174,44 @@ export default function ItemSheet({ item, onClose, onSaved }: Props) {
             style={styles.input}
           />
 
-          <Text style={styles.label}>Price (₹)</Text>
+          <Text style={styles.label}>Price</Text>
+          {item ? (
+            <>
+              <View style={styles.priceBox}>
+                <Text style={styles.priceValue}>{item.effectivePrice != null ? formatMoney(item.effectivePrice) : '—'}</Text>
+                {item.price != null && item.effectivePrice != null && item.effectivePrice < item.price && (
+                  <Text style={styles.priceStruck}>{formatMoney(item.price)}</Text>
+                )}
+                <Text style={styles.lockTag}>Set by Fengle</Text>
+              </View>
+              <Text style={styles.photoHint}>Only Fengle can change prices. Contact Fengle if this one needs updating.</Text>
+            </>
+          ) : (
+            <Text style={styles.priceNote}>
+              Fengle sets the price. Your dish stays hidden from customers until Fengle approves it and adds the price.
+            </Text>
+          )}
+
+          <Text style={styles.label}>Portion size (optional)</Text>
           <TextInput
-            value={price}
-            onChangeText={(t) => setPrice(t.replace(/[^0-9.]/g, ''))}
-            placeholder="120"
+            value={quantityText}
+            onChangeText={(t) => setQuantityText(t.replace(/[^0-9.]/g, ''))}
+            placeholder="e.g. 500"
             placeholderTextColor={colors.faint}
             keyboardType="decimal-pad"
-            maxLength={9}
+            maxLength={8}
             style={styles.input}
           />
+          <View style={styles.chips}>
+            {PORTION_UNITS.map((u) => (
+              <Chip key={u} label={u} on={unit === u} onPress={() => setUnit(unit === u ? null : u)} />
+            ))}
+          </View>
+          {portion.kind === 'invalid' ? (
+            <Text style={styles.portionError}>{portion.message}</Text>
+          ) : (
+            <Text style={styles.photoHint}>How much one order holds, like 500 gm or 3 pc. Tap the unit again to clear it.</Text>
+          )}
 
           <Text style={styles.label}>Category</Text>
           <View style={styles.chips}>
@@ -239,6 +281,12 @@ const styles = StyleSheet.create({
   chip: { paddingHorizontal: 14, height: 36, borderRadius: 99, borderWidth: 1.5, borderColor: colors.border, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.white },
   chipDisabled: { backgroundColor: colors.greyChipBg },
   chipText: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.bodyMuted },
+  priceBox: { marginTop: 6, minHeight: 48, borderRadius: 12, borderWidth: 1.5, borderColor: colors.borderAlt, paddingHorizontal: 14, flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: colors.greyChipBg },
+  priceValue: { fontFamily: fonts.bodyExtraBold, fontSize: 14, color: colors.ink },
+  priceStruck: { fontFamily: fonts.body, fontSize: 12.5, color: colors.mutedLight, textDecorationLine: 'line-through' },
+  lockTag: { marginLeft: 'auto', fontFamily: fonts.bodyBold, fontSize: 11, color: colors.bodyMuted },
+  priceNote: { marginTop: 6, padding: 10, borderRadius: 10, backgroundColor: colors.goldChipBg, fontFamily: fonts.bodyBold, fontSize: 12, lineHeight: 17, color: colors.goldChipText },
+  portionError: { marginTop: 6, fontFamily: fonts.bodyBold, fontSize: 12, lineHeight: 17, color: status.alert },
   error: { marginTop: 14, fontFamily: fonts.bodyBold, fontSize: 12.5, color: status.alert },
   save: { marginTop: 14 },
 });

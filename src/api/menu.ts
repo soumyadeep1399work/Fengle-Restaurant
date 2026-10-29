@@ -1,21 +1,27 @@
 import { ApiError, apiFetch } from './client';
-import { MenuItem, RestaurantProfile } from '../types';
+import { MenuItem, PortionUnit, RestaurantProfile } from '../types';
 
 /**
  * GET /restaurants/me/menu — every item in the kitchen's approved categories,
- * including the ones switched off.
+ * including the ones switched off, plus this kitchen's own dishes still waiting
+ * for Fengle to set a price (`awaiting_price`, with `price` null).
  */
 export async function fetchMenu(): Promise<MenuItem[]> {
   const { items } = await apiFetch<{ items: any[] }>('/restaurants/me/menu');
   return items.map((i) => ({
     id: Number(i.id),
     name: String(i.name),
-    price: Number(i.price),
+    price: i.price == null ? null : Number(i.price),
+    effectivePrice: i.effective_price == null ? null : Number(i.effective_price),
+    awaitingPrice: Boolean(i.awaiting_price),
     categoryId: Number(i.category_id),
     categoryName: String(i.category_name ?? ''),
     imageUrl: i.image_url ? String(i.image_url) : null,
     isVeg: Boolean(i.is_veg),
     isAvailable: Boolean(i.is_available),
+    quantityValue: i.quantity_value == null ? null : Number(i.quantity_value),
+    quantityUnit: i.quantity_unit ? (String(i.quantity_unit) as PortionUnit) : null,
+    portionLabel: i.portion_label ? String(i.portion_label) : null,
   }));
 }
 
@@ -39,6 +45,15 @@ export async function fetchRestaurantProfile(): Promise<RestaurantProfile | null
       agreementRequired: Boolean(restaurant.agreementRequired),
       verificationStatus: restaurant.verificationStatus ?? 'approved',
       verificationDeniedReason: restaurant.verificationDeniedReason ?? null,
+      documents: restaurant.documents
+        ? {
+            status: restaurant.documents.status,
+            missing: Array.isArray(restaurant.documents.missing) ? restaurant.documents.missing.map(String) : [],
+            validUntil: restaurant.documents.validUntil ?? null,
+            pendingCount: Number(restaurant.documents.pendingCount ?? 0),
+          }
+        : null,
+      documentsPortalUrl: restaurant.documentsPortalUrl ? String(restaurant.documentsPortalUrl) : 'https://partner.fengle.in',
     };
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return null;
@@ -58,45 +73,62 @@ export async function uploadImage(uri: string): Promise<string> {
   return url;
 }
 
+export interface Portion {
+  value: number;
+  unit: PortionUnit;
+}
+
+// Prices are set by Fengle admins only (the backend answers 403 `price_admin_only` to a kitchen that sends
+// one), so nothing in this file can send a price. A new dish is created hidden and priced later by an admin.
+
 export interface NewItem {
   categoryId: number;
   name: string;
-  price: number;
   isVeg: boolean;
   imageUrl?: string;
+  portion?: Portion;
 }
 
-/** POST /items — the item joins the shared catalog and is switched on at this kitchen. */
+/**
+ * POST /items — proposes a dish for this kitchen. It stays hidden from customers
+ * (`awaiting_price`) until a Fengle admin prices and publishes it.
+ */
 export function createItem(item: NewItem) {
   return apiFetch<{ item: unknown }>('/items', {
     method: 'POST',
     body: {
       category_id: item.categoryId,
       name: item.name,
-      price: item.price,
       is_veg: item.isVeg,
       ...(item.imageUrl ? { image_url: item.imageUrl } : {}),
+      ...(item.portion ? { quantity_value: item.portion.value, quantity_unit: item.portion.unit } : {}),
     },
   });
 }
 
 export interface ItemChanges {
   name?: string;
-  price?: number;
   isVeg?: boolean;
   /** A URL to set the photo, or null to remove it. Leave undefined to keep it. */
   imageUrl?: string | null;
+  /** A portion to set, or null to clear it. Leave undefined to keep it. */
+  portion?: Portion | null;
 }
 
 /**
  * PATCH /items/:id — the item is shared by every kitchen in its category, so
- * changes show for all of them (and for customers). Category can't be changed.
+ * changes show for all of them (and for customers). Category can't be changed,
+ * and the price isn't editable here: it belongs to Fengle admins.
  */
 export function updateItem(id: number, changes: ItemChanges) {
   const body: Record<string, unknown> = {};
   if (changes.name !== undefined) body.name = changes.name;
-  if (changes.price !== undefined) body.price = changes.price;
   if (changes.isVeg !== undefined) body.is_veg = changes.isVeg;
   if (changes.imageUrl !== undefined) body.image_url = changes.imageUrl;
+  if (changes.portion !== undefined) {
+    // The backend wants both together, or both null to clear.
+    body.quantity_value = changes.portion ? changes.portion.value : null;
+    body.quantity_unit = changes.portion ? changes.portion.unit : null;
+  }
   return apiFetch<{ item: unknown }>(`/items/${id}`, { method: 'PATCH', body });
 }

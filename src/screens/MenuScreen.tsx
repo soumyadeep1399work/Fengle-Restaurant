@@ -111,15 +111,32 @@ export default function MenuScreen({ onAddItem, onEditItem, onAddCategory, refre
             <View key={m.id} style={styles.row}>
               {m.imageUrl ? <Image source={{ uri: m.imageUrl }} style={styles.photo} /> : <View style={[styles.photo, styles.photoEmpty]} />}
               <View style={styles.flex}>
-                <Text style={[styles.name, !m.isAvailable && styles.nameOff]}>{m.name}</Text>
-                <Text style={styles.meta}>{formatMoney(m.price)}</Text>
+                <Text style={[styles.name, !m.isAvailable && !m.awaitingPrice && styles.nameOff]}>
+                  {m.name}
+                  {!!m.portionLabel && <Text style={styles.portion}>{`  ${m.portionLabel}`}</Text>}
+                </Text>
+                {m.awaitingPrice ? (
+                  <Text style={styles.awaiting}>Awaiting price approval</Text>
+                ) : (
+                  <Text style={styles.meta}>
+                    {m.effectivePrice != null ? formatMoney(m.effectivePrice) : ''}
+                    {m.price != null && m.effectivePrice != null && m.effectivePrice < m.price && (
+                      <Text style={styles.struck}>{`  ${formatMoney(m.price)}`}</Text>
+                    )}
+                  </Text>
+                )}
               </View>
-              <Pressable onPress={() => onEditItem(m)} hitSlop={8}>
-                <Text style={styles.edit}>Edit</Text>
-              </Pressable>
-              <Pressable onPress={() => toggle(m)} hitSlop={8} style={[styles.track, { backgroundColor: m.isAvailable ? colors.veg : status.trackOff }]}>
-                <View style={[styles.thumb, { marginLeft: m.isAvailable ? 22 : 0 }]} />
-              </Pressable>
+              {/* A dish still waiting for its price isn't live yet: it can't be edited (the server refuses) or switched on/off. */}
+              {!m.awaitingPrice && (
+                <>
+                  <Pressable onPress={() => onEditItem(m)} hitSlop={8}>
+                    <Text style={styles.edit}>Edit</Text>
+                  </Pressable>
+                  <Pressable onPress={() => toggle(m)} hitSlop={8} style={[styles.track, { backgroundColor: m.isAvailable ? colors.veg : status.trackOff }]}>
+                    <View style={[styles.thumb, { marginLeft: m.isAvailable ? 22 : 0 }]} />
+                  </Pressable>
+                </>
+              )}
             </View>
           ))}
         </View>
@@ -138,6 +155,9 @@ const styles = StyleSheet.create({
   name: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink },
   nameOff: { color: colors.mutedLight },
   meta: { marginTop: 2, fontFamily: fonts.body, fontSize: 12, color: colors.mutedLight },
+  portion: { fontFamily: fonts.body, fontSize: 12, color: colors.mutedLight },
+  struck: { textDecorationLine: 'line-through', color: colors.faint },
+  awaiting: { alignSelf: 'flex-start', marginTop: 4, paddingHorizontal: 8, paddingVertical: 2, borderRadius: 99, overflow: 'hidden', backgroundColor: colors.goldChipBg, fontFamily: fonts.bodyBold, fontSize: 11, color: colors.goldChipText },
   actions: { flexDirection: 'row', gap: 10, marginBottom: 6 },
   addBtn: { height: 44, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   addItem: { flex: 3, backgroundColor: colors.primary },

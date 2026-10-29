@@ -27,6 +27,7 @@ import ProfileScreen from './src/screens/ProfileScreen';
 import OrderDetailScreen from './src/screens/OrderDetailScreen';
 import AgreementScreen from './src/screens/AgreementScreen';
 import ItemSheet from './src/components/ItemSheet';
+import DocumentsBanner from './src/components/DocumentsBanner';
 import CategorySheet from './src/components/CategorySheet';
 import TakeoverScreen from './src/screens/TakeoverScreen';
 import { colors, fonts } from './src/theme';
@@ -103,6 +104,8 @@ function Shell() {
       <StatusBar style="dark" />
       <SafeAreaView style={styles.flex} edges={['top']}>
         <Text style={styles.title}>{TITLES[tab]}</Text>
+        {/* Nudges the kitchen to upload its KYC / licence documents at partner.fengle.in until they're approved. */}
+        {(tab === 'orders' || tab === 'profile') && <DocumentsBanner />}
         {tab === 'orders' && <OrdersScreen onOpenOrder={setOpenOrderId} />}
         {tab === 'menu' && <MenuScreen onAddItem={() => setItemSheet({})} onEditItem={(item) => setItemSheet({ item })} onAddCategory={() => setCategorySheetOpen(true)} refreshKey={menuVersion} />}
         {tab === 'sales' && <SalesScreen />}

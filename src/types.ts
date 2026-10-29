@@ -33,20 +33,44 @@ export interface Order {
   items: OrderItem[];
 }
 
+export type PortionUnit = 'pc' | 'gm' | 'kg' | 'ml' | 'ltr';
+
 export interface MenuItem {
   id: number;
   name: string;
-  price: number;
+  /** The normal price, set by Fengle. Null while the dish is still awaiting a price. */
+  price: number | null;
+  /** What customers pay right now: lower than `price` while an admin-set offer runs. Null while awaiting a price. */
+  effectivePrice: number | null;
+  /** A dish this kitchen proposed that Fengle hasn't priced and published yet (hidden from customers). */
+  awaitingPrice: boolean;
   categoryId: number;
   categoryName: string;
   imageUrl: string | null;
   isVeg: boolean;
   isAvailable: boolean;
+  /** Optional portion size, e.g. 500 + 'gm'. Both are set or both are null. */
+  quantityValue: number | null;
+  quantityUnit: PortionUnit | null;
+  /** Ready-made label from the server ("500 gm", "3 pc"); null when no portion is set. */
+  portionLabel: string | null;
 }
 
 export interface Category {
   id: number;
   name: string;
+}
+
+export type DocumentsStatus = 'complete' | 'expiring' | 'pending' | 'rejected' | 'expired' | 'missing';
+
+/** Where the kitchen stands on its KYC / licence documents (uploaded at partner.fengle.in, approved by Fengle). */
+export interface PartnerDocuments {
+  status: DocumentsStatus;
+  /** Required document types never uploaded: 'aadhaar' | 'fssai' | 'trade_license'. */
+  missing: string[];
+  /** When the earliest-expiring required document runs out (only meaningful while `expiring`). */
+  validUntil: string | null;
+  pendingCount: number;
 }
 
 export interface RestaurantProfile {
@@ -60,4 +84,8 @@ export interface RestaurantProfile {
   verificationStatus: 'pending' | 'approved' | 'denied';
   /** Why the photo was denied (shown on the agreement screen). */
   verificationDeniedReason: string | null;
+  /** Null if the backend didn't send it (older build). */
+  documents: PartnerDocuments | null;
+  /** The partner web portal where documents are uploaded. */
+  documentsPortalUrl: string;
 }
