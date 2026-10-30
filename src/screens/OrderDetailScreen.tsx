@@ -10,9 +10,10 @@ import { formatMoney } from '../utils/money';
 import { confirmReject, errorMessage, showError } from '../utils/actions';
 import { orderTitle, paymentLabel, statusStyle } from '../utils/orderFormat';
 import Button from '../components/Button';
+import { usePullRefresh } from '../utils/usePullRefresh';
 
 export default function OrderDetailScreen({ orderId, onClose }: { orderId: number; onClose: () => void }) {
-  const { orders, accept, reject, markPreparing, markOrderReady } = useOrders();
+  const { orders, accept, reject, markPreparing, markOrderReady, refresh } = useOrders();
   const [detail, setDetail] = useState<{ order: Order; lines: OrderLine[] } | null>(null);
   const [loadError, setLoadError] = useState('');
   const [busy, setBusy] = useState(false);
@@ -31,6 +32,8 @@ export default function OrderDetailScreen({ orderId, onClose }: { orderId: numbe
   useEffect(() => {
     load();
   }, [load]);
+
+  const pullRefresh = usePullRefresh(() => Promise.all([load(), refresh()]));
 
   // The polled list is the live source for status; the detail fetch supplies the priced lines.
   const live = orders.find((o) => o.id === orderId) ?? detail?.order ?? null;
@@ -80,7 +83,7 @@ export default function OrderDetailScreen({ orderId, onClose }: { orderId: numbe
         <Text style={styles.headerTitle}>{live ? orderTitle(live) : 'Order'}</Text>
       </View>
 
-      <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+      <ScrollView style={styles.flex} contentContainerStyle={styles.content} refreshControl={pullRefresh}>
         {!detail && !loadError && <ActivityIndicator style={styles.loader} color={colors.primary} />}
         {!!loadError && <Text style={styles.error}>{loadError}</Text>}
 

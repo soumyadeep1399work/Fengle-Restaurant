@@ -32,33 +32,68 @@ export function setItemAvailability(restaurantId: number, itemId: number, isAvai
   });
 }
 
+function mapProfile(restaurant: any): RestaurantProfile {
+  return {
+    id: Number(restaurant.id),
+    name: String(restaurant.name),
+    address: String(restaurant.address ?? ''),
+    categories: (restaurant.categories ?? []).map((c: any) => ({ id: Number(c.id), name: String(c.name) })),
+    // Missing on an older backend build -> not gated, since there's no accept-agreement endpoint to submit to yet.
+    agreementRequired: Boolean(restaurant.agreementRequired),
+    verificationStatus: restaurant.verificationStatus ?? 'approved',
+    verificationDeniedReason: restaurant.verificationDeniedReason ?? null,
+    documents: restaurant.documents
+      ? {
+          status: restaurant.documents.status,
+          missing: Array.isArray(restaurant.documents.missing) ? restaurant.documents.missing.map(String) : [],
+          validUntil: restaurant.documents.validUntil ?? null,
+          pendingCount: Number(restaurant.documents.pendingCount ?? 0),
+        }
+      : null,
+    documentsPortalUrl: restaurant.documentsPortalUrl ? String(restaurant.documentsPortalUrl) : 'https://partner.fengle.in',
+    bankAccount: restaurant.bank_account
+      ? {
+          accountHolderName: String(restaurant.bank_account.account_holder_name ?? ''),
+          accountNumberLast4: String(restaurant.bank_account.account_number_last4 ?? ''),
+          ifsc: String(restaurant.bank_account.ifsc ?? ''),
+          bankName: restaurant.bank_account.bank_name ?? null,
+          upiId: restaurant.bank_account.upi_id ?? null,
+          updatedAt: restaurant.bank_account.updated_at ?? null,
+        }
+      : null,
+  };
+}
+
 /** GET /restaurants/me — null when the backend doesn't have it (404). */
 export async function fetchRestaurantProfile(): Promise<RestaurantProfile | null> {
   try {
     const { restaurant } = await apiFetch<{ restaurant: any }>('/restaurants/me');
-    return {
-      id: Number(restaurant.id),
-      name: String(restaurant.name),
-      address: String(restaurant.address ?? ''),
-      categories: (restaurant.categories ?? []).map((c: any) => ({ id: Number(c.id), name: String(c.name) })),
-      // Missing on an older backend build -> not gated, since there's no accept-agreement endpoint to submit to yet.
-      agreementRequired: Boolean(restaurant.agreementRequired),
-      verificationStatus: restaurant.verificationStatus ?? 'approved',
-      verificationDeniedReason: restaurant.verificationDeniedReason ?? null,
-      documents: restaurant.documents
-        ? {
-            status: restaurant.documents.status,
-            missing: Array.isArray(restaurant.documents.missing) ? restaurant.documents.missing.map(String) : [],
-            validUntil: restaurant.documents.validUntil ?? null,
-            pendingCount: Number(restaurant.documents.pendingCount ?? 0),
-          }
-        : null,
-      documentsPortalUrl: restaurant.documentsPortalUrl ? String(restaurant.documentsPortalUrl) : 'https://partner.fengle.in',
-    };
+    return mapProfile(restaurant);
   } catch (e) {
     if (e instanceof ApiError && e.status === 404) return null;
     throw e;
   }
+}
+
+export interface BankAccountInput {
+  accountHolderName: string;
+  accountNumber: string;
+  ifsc: string;
+  upiId?: string | null;
+}
+
+/** Saves (or replaces) the account payouts are sent to. The server answers with the masked profile. */
+export async function saveBankAccount(input: BankAccountInput): Promise<RestaurantProfile> {
+  const { restaurant } = await apiFetch<{ restaurant: any }>('/restaurants/me/bank-account', {
+    method: 'PUT',
+    body: {
+      account_holder_name: input.accountHolderName,
+      account_number: input.accountNumber,
+      ifsc: input.ifsc,
+      upi_id: input.upiId || null,
+    },
+  });
+  return mapProfile(restaurant);
 }
 
 /**

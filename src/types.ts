@@ -88,4 +88,15 @@ export interface RestaurantProfile {
   documents: PartnerDocuments | null;
   /** The partner web portal where documents are uploaded. */
   documentsPortalUrl: string;
+  /** Where payouts go. Masked by the server (only the last 4 digits); null until the kitchen adds one. */
+  bankAccount: BankAccount | null;
+}
+
+export interface BankAccount {
+  accountHolderName: string;
+  accountNumberLast4: string;
+  ifsc: string;
+  bankName: string | null;
+  upiId: string | null;
+  updatedAt: string | null;
 }

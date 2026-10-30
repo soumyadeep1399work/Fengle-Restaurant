@@ -1,33 +1,48 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Alert, Linking, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { colors, fonts } from '../theme';
 import { fetchRestaurantProfile } from '../api/menu';
 import { useAuth } from '../context/AuthContext';
 import { RestaurantProfile } from '../types';
+import { maskedNumber } from '../utils/bank';
+import BankDetailsScreen from './BankDetailsScreen';
+import { usePullRefresh } from '../utils/usePullRefresh';
 
 const ACCOUNT_DELETION_URL = 'https://fengle.in/data-deletion.html';
 
 export default function ProfileScreen() {
   const { user, logout } = useAuth();
   const [profile, setProfile] = useState<RestaurantProfile | null>(null);
+  const [bankOpen, setBankOpen] = useState(false);
 
-  useEffect(() => {
-    let cancelled = false;
-    fetchRestaurantProfile()
-      .then((p) => !cancelled && setProfile(p))
-      .catch(() => {}); // the session's name is a good enough fallback
-    return () => {
-      cancelled = true;
-    };
+  const loadProfile = useCallback(async () => {
+    try {
+      setProfile(await fetchRestaurantProfile());
+    } catch {
+      // the session's name is a good enough fallback
+    }
   }, []);
 
+  useEffect(() => {
+    loadProfile();
+  }, [loadProfile]);
+
+  const pullRefresh = usePullRefresh(loadProfile);
+
+  if (bankOpen) {
+    return <BankDetailsScreen saved={profile?.bankAccount ?? null} onSaved={setProfile} onBack={() => setBankOpen(false)} />;
+  }
+
+  const bank = profile?.bankAccount ?? null;
   const name = profile?.name ?? user?.name ?? 'Your kitchen';
   const address = profile?.address ?? (user?.phone ? `+91 ${user.phone}` : '');
 
-  const rows: { label: string; danger?: boolean; onPress: () => void }[] = [
+  const rows: { label: string; hint?: string; hintColor?: string; danger?: boolean; onPress: () => void }[] = [
     {
-      label: 'Payout details',
-      onPress: () => Alert.alert('Payout details', 'Payouts are handled by the Fengle team. Contact them to update your bank details.'),
+      label: 'Bank details',
+      hint: bank ? maskedNumber(bank.accountNumberLast4) : 'Add to get paid',
+      hintColor: bank ? undefined : colors.gold,
+      onPress: () => setBankOpen(true),
     },
     {
       label: 'Support',
@@ -50,7 +65,7 @@ export default function ProfileScreen() {
   ];
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.flex} contentContainerStyle={styles.content} refreshControl={pullRefresh}>
       <View style={styles.header}>
         <View style={styles.avatar}>
           <Text style={styles.avatarText}>{name.charAt(0).toUpperCase()}</Text>
@@ -63,7 +78,10 @@ export default function ProfileScreen() {
       {rows.map((r) => (
         <Pressable key={r.label} onPress={r.onPress} style={styles.row}>
           <Text style={[styles.rowLabel, r.danger && styles.danger]}>{r.label}</Text>
-          <Text style={styles.chevron}>›</Text>
+          <View style={styles.rowEnd}>
+            {!!r.hint && <Text style={[styles.rowHint, r.hintColor ? { color: r.hintColor } : null]}>{r.hint}</Text>}
+            <Text style={styles.chevron}>›</Text>
+          </View>
         </Pressable>
       ))}
     </ScrollView>
@@ -81,5 +99,7 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 15, paddingHorizontal: 2, borderBottomWidth: 1, borderBottomColor: colors.borderLight },
   rowLabel: { fontFamily: fonts.bodyBold, fontSize: 14, color: colors.ink },
   danger: { color: colors.primaryMid },
+  rowEnd: { flexDirection: 'row', alignItems: 'center', gap: 10 },
+  rowHint: { fontFamily: fonts.bodyBold, fontSize: 12.5, color: colors.mutedLight },
   chevron: { fontSize: 17, color: colors.faint },
 });

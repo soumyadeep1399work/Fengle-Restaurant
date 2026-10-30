@@ -4,6 +4,7 @@ import { LinearGradient } from 'expo-linear-gradient';
 import { colors, fonts } from '../theme';
 import { useOrders } from '../context/OrdersContext';
 import { formatMoney } from '../utils/money';
+import { usePullRefresh } from '../utils/usePullRefresh';
 
 const DAYS = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday'];
 
@@ -12,7 +13,8 @@ const dayKey = (d: Date) => `${d.getFullYear()}-${d.getMonth()}-${d.getDate()}`;
 // There's no sales endpoint, so revenue is worked out from the kitchen's own
 // delivered orders (food value after any dropped items, before GST and delivery).
 export default function SalesScreen() {
-  const { orders } = useOrders();
+  const { orders, refresh } = useOrders();
+  const pullRefresh = usePullRefresh(refresh);
 
   const { today, weekRows } = useMemo(() => {
     const totals = new Map<string, { count: number; amount: number }>();
@@ -37,7 +39,7 @@ export default function SalesScreen() {
   }, [orders]);
 
   return (
-    <ScrollView style={styles.flex} contentContainerStyle={styles.content}>
+    <ScrollView style={styles.flex} contentContainerStyle={styles.content} refreshControl={pullRefresh}>
       <LinearGradient colors={[colors.primary, '#2F0F6B']} start={{ x: 0, y: 0 }} end={{ x: 1, y: 1 }} style={styles.hero}>
         <Text style={styles.heroLabel}>Today’s revenue</Text>
         <Text style={styles.heroValue}>{formatMoney(today.amount)}</Text>

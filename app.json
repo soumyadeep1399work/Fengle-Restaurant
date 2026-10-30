@@ -10,7 +10,7 @@
     "backgroundColor": "#4B18A6",
     "android": {
       "package": "com.fengle.restaurant",
-      "versionCode": 3,
+      "versionCode": 5,
       "adaptiveIcon": {
         "backgroundColor": "#4B18A6",
         "foregroundImage": "./assets/android-icon-foreground.png",
